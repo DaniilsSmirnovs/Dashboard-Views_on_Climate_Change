@@ -1,5 +1,28 @@
 
-# Libraries
+# ============================================================
+# Shiny Dashboard – Global Configuration & Plot Functions
+# Purpose:
+#   - Load cleaned survey dataset
+#   - Prepare reusable lists for UI controls
+#   - Define plotting functions for dashboard visualisations
+#
+# QA Principles:
+#   - Script runs from top to bottom reproducibly
+#   - Clean data is loaded (raw data not touched here)
+#   - Plot functions are modular and reusable
+#   - Factor ordering is controlled for consistency
+# ============================================================
+
+
+# ============================================================
+# 1. Load Required Libraries
+# ============================================================
+
+# Only required packages are loaded.
+# tidyverse = data manipulation
+# shiny / shinydashboard = application framework
+# plotly = interactivity layer
+# stringr = text formatting for display
 
 library(readxl)
 library(tidyverse)
@@ -8,13 +31,40 @@ library(shinydashboard)
 library(plotly)
 library(stringr)
 
-message("global.R loaded")
+message("global.R loaded")  # Confirms script execution in console logs
 
-scs_data_cleaned <- read_csv("../../data/scs_data_cleaned.csv")
+
+# ============================================================
+# 2. Load Cleaned Dataset
+# ============================================================
+
+# This script intentionally loads a pre-cleaned dataset.
+# Data cleaning is handled in a separate pipeline.
+# This separation ensures:
+#   - Raw data integrity
+#   - Clear DAG structure
+#   - Dashboard only depends on validated outputs
+
+scs_data_cleaned <- read_csv("data/scs_data_cleaned.csv")
+
+
+# ============================================================
+# 3. Prepare Reference Lists for UI Controls
+# ============================================================
+
+# Extract available demographic parameters dynamically.
+# This ensures dropdown menus remain robust to future updates.
 
 parameters_list <- scs_data_cleaned |> 
   pull(demographic_parameter) |>
   unique()
+
+
+# Define fixed subgroup ordering.
+# Explicit ordering prevents:
+#   - Alphabetical reordering
+#   - Inconsistent plot appearance
+#   - UI instability across sessions
 
 subgroups_list <- c(
   "Overall Population",
@@ -51,11 +101,22 @@ subgroups_list <- c(
   "Postal"
 )
 
-## Making subgroup field a factor 
 
+# ============================================================
+# 4. Enforce Factor Ordering
+# ============================================================
+
+# Converting subgroup into a factor ensures:
+#   - Controlled display order
+#   - Consistency across all plots
+#   - No unintended reordering by ggplot
 
 scs_data_cleaned <- scs_data_cleaned |> 
   mutate(subgroup = factor(subgroup, levels = subgroups_list))
+
+
+# Generate parameter–subgroup combinations.
+# Useful for dynamic UI filtering logic.
 
 select_subgroups <- scs_data_cleaned|> 
   select(demographic_parameter, subgroup) |> 
@@ -64,12 +125,25 @@ select_subgroups <- scs_data_cleaned|>
   ungroup()
 
 
-# Plot #1: Knowledge
+
+# ============================================================
+# 5. Plot 1 – Knowledge of Climate Change (T1)
+# ============================================================
+
+# Extract valid response options directly from dataset.
+# Avoids hardcoding categories elsewhere in the app.
 
 knowledge_response_list <- scs_data_cleaned |> 
   filter(question_number == "T1") |> 
   pull(response_category) |>
   unique()
+
+
+# Function design:
+#   - Modular and reusable
+#   - Accepts filtering inputs
+#   - Keeps plotting logic encapsulated
+#   - Returns interactive Plotly object
 
 plot_knowledge <- function(
     data, 
@@ -78,6 +152,7 @@ plot_knowledge <- function(
     subgroup_values = NULL
 ){
   
+  # Explicit ordering of Likert responses
   response_levels <- c(
     "A great deal",
     "A fair amount",
@@ -87,6 +162,7 @@ plot_knowledge <- function(
     "Prefer not to say"
   )
   
+  # Controlled colour mapping ensures consistency
   clr_knowledge <- c(
     "A great deal"        = "#002d54",
     "A fair amount"       = "#2b9c93",
@@ -96,15 +172,24 @@ plot_knowledge <- function(
     "Prefer not to say"   = "#ca72a2"
   )
   
+  # Optional response filtering
   if (!is.null(knowledge_responses)) {
     data <- data |>
       filter(response_category %in% knowledge_responses)
   }
   
+  # Optional subgroup filtering
   if (!is.null(subgroup_values)) {
     data <- data |>
       filter(subgroup %in% subgroup_values)
   }
+  
+  # Plot construction:
+  #   - Filter to correct question and parameter
+  #   - Remove missing values
+  #   - Enforce factor ordering
+  #   - Use stacked bar format
+  #   - Convert to interactive Plotly
   
   ggplotly(
     data |>
@@ -158,12 +243,24 @@ plot_knowledge <- function(
     )
 }
 
-# Plot #2: Urgency
+
+
+# ============================================================
+# 6. Plot 2 – Perceived Urgency (T3)
+# ============================================================
+
+# Extract urgency response categories dynamically
 
 urgency_response_list <- scs_data_cleaned |> 
   filter(question_number == "T3") |> 
   pull(response_category) |>
   unique()
+
+
+# Design:
+#   - Focused single-response visualisation
+#   - Lollipop-style plot for clarity
+#   - Supports subgroup filtering
 
 plot_urgency <- function(
     data, 
@@ -213,12 +310,7 @@ plot_urgency <- function(
         x = "Demographic Subgroups",
         y = str_wrap(str_glue("% {urgency_responses}"), width = 50)
       ) +
-      theme_minimal() +
-      theme(
-        axis.title.x = element_text(size = 12),
-        axis.title.y = element_text(size = 12),
-        axis.text    = element_text(size = 10)
-      ),
+      theme_minimal(),
     tooltip = "text"
   )|> 
     style(
@@ -231,13 +323,24 @@ plot_urgency <- function(
 }
 
 
-# Plot #3: Trusted Sources of Information
+
+# ============================================================
+# 7. Plot 3 – Trusted Sources (T7)
+# ============================================================
+
+# Generate parameter–subgroup reference for sources
 
 sources_subgroups_list <- scs_data_cleaned |>
   select(demographic_parameter, subgroup) |> 
   group_by(demographic_parameter, subgroup) |> 
   summarise() |> 
   ungroup()
+
+
+# Design:
+#   - Select top N trusted sources
+#   - Clean labels (remove bracketed metadata)
+#   - Horizontal ranking bar chart
 
 plot_sources <- function(
     data, 
@@ -272,11 +375,6 @@ plot_sources <- function(
                x = str_glue("Top {ntop} Trusted  Sources"),
                y = "% Trusts the source"
              ) +
-             theme(
-               axis.title.x = element_text(size = 12),
-               axis.title.y = element_text(size = 12),
-               axis.text    = element_text(size = 10)
-             ) +
              theme_minimal(),
            tooltip = "text") |> 
     style(
@@ -289,13 +387,21 @@ plot_sources <- function(
 }  
 
 
-# Plot #4: Negative Impact
+
+# ============================================================
+# 8. Plot 4 – Negative Impact on Daily Life (T11)
+# ============================================================
+
+# Extract response categories dynamically
 
 negative_impact_response_list <- scs_data_cleaned |> 
   filter(question_number == "T11") |> 
   pull(response_category) |>
   unique()
 
+
+# Design mirrors Knowledge plot for visual consistency.
+# Explicit response ordering ensures interpretability.
 
 plot_negative_impact <- function(
     data, 

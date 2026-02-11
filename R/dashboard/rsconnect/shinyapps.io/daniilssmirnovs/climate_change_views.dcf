@@ -1,0 +1,12 @@
+name: climate_change_views
+title:
+username: daniilssmirnovs
+account: daniilssmirnovs
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 16627148
+bundleId: 11569593
+url: https://daniilssmirnovs.shinyapps.io/climate_change_views/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
